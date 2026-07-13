@@ -151,7 +151,21 @@ export function PuzzleGenerator() {
   }
 
   function downloadSvg() {
-    const blob = new Blob([puzzle.svg], { type: "image/svg+xml" })
+    // O arquivo baixado sai sempre com linha fina preta (0,1 mm), padrão para corte a laser —
+    // cor/espessura do preview são só visuais. Traço grosso em alguns softwares vira contorno
+    // com duas bordas paralelas ("linha dupla"), o que duplicaria o corte.
+    const cutFile = generatePuzzle({
+      widthMm,
+      heightMm,
+      rows,
+      cols,
+      seed,
+      tabSize,
+      jitter,
+      strokeColor: "#000000",
+      strokeWidthMm: 0.1,
+    })
+    const blob = new Blob([cutFile.svg], { type: "image/svg+xml" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
@@ -348,7 +362,7 @@ export function PuzzleGenerator() {
 
         <div
           className="flex items-center gap-2"
-          title="Cor e espessura são só do preview — o laser corta qualquer traçado vetorial."
+          title="Cor e espessura são só do preview — o SVG baixado sai sempre com linha fina preta de 0,1 mm, padrão para corte a laser."
         >
           {STROKE_PRESETS.map((preset) => (
             <button
