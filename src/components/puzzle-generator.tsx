@@ -167,13 +167,19 @@ export function PuzzleGenerator() {
   function onSheetPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!photo) return
     e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
     dragRef.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       baseX: photoTransform.x,
       baseY: photoTransform.y,
+    }
+    // Captura o ponteiro pra continuar arrastando mesmo saindo da chapa; pode lançar se o
+    // ponteiro já não existir mais — sem captura o arrasto ainda funciona dentro do elemento.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* segue sem captura */
     }
   }
 
