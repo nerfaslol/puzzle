@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   Dices,
@@ -6,6 +6,7 @@ import {
   ImagePlus,
   Moon,
   Puzzle,
+  RotateCcw,
   Ruler,
   Scissors,
   Sun,
@@ -82,7 +83,17 @@ export function PuzzleGenerator() {
   const [photoAspect, setPhotoAspect] = useState<number | null>(null)
   const [aspectMode, setAspectMode] = useState<"photo" | "free">("free")
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"))
+  // Pan/zoom da foto no preview: deslocamento em px do preview e escala sobre o object-cover.
+  const [photoTransform, setPhotoTransform] = useState({ x: 0, y: 0, scale: 1 })
   const photoInputRef = useRef<HTMLInputElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    baseX: number
+    baseY: number
+  } | null>(null)
 
   const widthMm = parseClamped(widthStr, 10, 5000, 300)
   const lockToPhoto = aspectMode === "photo" && photoAspect !== null
@@ -140,6 +151,7 @@ export function PuzzleGenerator() {
       }
       img.src = url
       setPhoto(url)
+      setPhotoTransform({ x: 0, y: 0, scale: 1 })
     }
     reader.readAsDataURL(file)
     e.target.value = ""
@@ -149,7 +161,47 @@ export function PuzzleGenerator() {
     setPhoto(null)
     setPhotoAspect(null)
     setAspectMode("free")
+    setPhotoTransform({ x: 0, y: 0, scale: 1 })
   }
+
+  function onSheetPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!photo) return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: photoTransform.x,
+      baseY: photoTransform.y,
+    }
+  }
+
+  function onSheetPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== e.pointerId) return
+    const dx = e.clientX - drag.startX
+    const dy = e.clientY - drag.startY
+    setPhotoTransform((t) => ({ ...t, x: drag.baseX + dx, y: drag.baseY + dy }))
+  }
+
+  function onSheetPointerUp() {
+    dragRef.current = null
+  }
+
+  // Zoom com a roda do mouse. Listener nativo com passive: false — o onWheel do React é
+  // registrado como passive e o preventDefault (necessário pra não rolar a página) não funciona.
+  useEffect(() => {
+    const el = sheetRef.current
+    if (!el || !photo) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
+      setPhotoTransform((t) => ({ ...t, scale: Math.min(6, Math.max(0.2, t.scale * factor)) }))
+    }
+    el.addEventListener("wheel", onWheel, { passive: false })
+    return () => el.removeEventListener("wheel", onWheel)
+  }, [photo])
 
   function downloadSvg() {
     // O arquivo baixado sai sempre com linha fina preta (0,1 mm), padrão para corte a laser —
@@ -417,7 +469,7 @@ export function PuzzleGenerator() {
           backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
         }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <span className="flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-xs font-medium backdrop-blur">
             <Ruler className="size-3.5 text-muted-foreground" />
             {widthMm} × {heightMm} mm
@@ -426,9 +478,33 @@ export function PuzzleGenerator() {
             <Scissors className="size-3.5 text-muted-foreground" />
             {pieceCount} peças
           </span>
+          {photo && (
+            <>
+              <span className="rounded-full border bg-background/80 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+                arraste a foto · scroll = zoom ({Math.round(photoTransform.scale * 100)}%)
+              </span>
+              <button
+                type="button"
+                onClick={() => setPhotoTransform({ x: 0, y: 0, scale: 1 })}
+                title="Recentralizar foto"
+                className="flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-xs font-medium backdrop-blur transition-colors hover:bg-background"
+              >
+                <RotateCcw className="size-3.5 text-muted-foreground" />
+                Resetar
+              </button>
+            </>
+          )}
         </div>
         <div
-          className="relative overflow-hidden bg-white shadow-xl ring-1 ring-black/5"
+          ref={sheetRef}
+          onPointerDown={onSheetPointerDown}
+          onPointerMove={onSheetPointerMove}
+          onPointerUp={onSheetPointerUp}
+          onPointerCancel={onSheetPointerUp}
+          className={cn(
+            "relative overflow-hidden bg-white shadow-xl ring-1 ring-black/5",
+            photo && "cursor-grab touch-none select-none active:cursor-grabbing",
+          )}
           style={{
             width: `min(100%, calc(75svh * ${(widthMm / heightMm).toFixed(4)}))`,
           }}
@@ -437,11 +513,15 @@ export function PuzzleGenerator() {
             <img
               src={photo}
               alt="Imagem de referência do quebra-cabeça"
-              className="absolute inset-0 size-full object-cover"
+              draggable={false}
+              className="pointer-events-none absolute inset-0 size-full object-cover will-change-transform"
+              style={{
+                transform: `translate(${photoTransform.x}px, ${photoTransform.y}px) scale(${photoTransform.scale})`,
+              }}
             />
           )}
           <div
-            className="relative [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
+            className="pointer-events-none relative [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
             dangerouslySetInnerHTML={{ __html: puzzle.svg }}
           />
         </div>
