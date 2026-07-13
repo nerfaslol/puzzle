@@ -12,6 +12,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Não há suíte de testes configurada neste projeto.
 
+## Deploy (GitHub Pages)
+
+- Site publicado em **https://nerfaslol.github.io/puzzle/** (repo `nerfaslol/puzzle`, público).
+- Deploy automático via GitHub Actions (`.github/workflows/deploy.yml`) a cada push na `main`; Pages configurado com source "GitHub Actions".
+- `vite.config.ts` tem `base: "/puzzle/"` — obrigatório para os assets funcionarem no subpath do Pages; se o repo for renomeado, atualizar o `base` junto.
+- O CI usa `npm install` (não `npm ci`): o lock é gerado no Windows e o npm omite deps opcionais transitivas de outra plataforma (bug npm/cli#4828), o que quebra `npm ci` no Linux. Não "corrigir" de volta para `npm ci` sem resolver isso.
+
 ## Stack e arquitetura
 
 - **Vite 8 + React 19 + TypeScript**, sem React Compiler habilitado.
