@@ -1,13 +1,17 @@
-import { useMemo, useState } from "react"
-import { AlertTriangle, Dices, Download, Ruler, Scissors } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useMemo, useRef, useState } from "react"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+  AlertTriangle,
+  Dices,
+  Download,
+  ImagePlus,
+  Moon,
+  Puzzle,
+  Ruler,
+  Scissors,
+  Sun,
+  X,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
@@ -17,35 +21,79 @@ import { generatePuzzle } from "@/lib/jigsaw"
 
 const STROKE_PRESETS = [
   { label: "Preto", value: "#111111" },
+  { label: "Branco", value: "#ffffff" },
   { label: "Vermelho", value: "#e11d2e" },
   { label: "Azul", value: "#1d4ed8" },
 ]
 
 const MIN_SAFE_PIECE_MM = 15
 
+/**
+ * Converte o texto do input em número clampado. Os inputs guardam string livre e o clamp só
+ * acontece aqui (na geração) e no blur — nunca no onChange, senão digitar "12" trava no "1".
+ */
+function parseClamped(raw: string, min: number, max: number, fallback: number): number {
+  const n = parseFloat(raw.replace(",", "."))
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
+}
+
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={htmlFor}>{label}</Label>
+    <div className="flex flex-col gap-1">
+      <Label htmlFor={htmlFor} className="text-xs">
+        {label}
+      </Label>
       {children}
     </div>
   )
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-sm font-medium text-foreground">{children}</h3>
+function SliderField({
+  label,
+  display,
+  ...sliderProps
+}: {
+  label: string
+  display: string
+} & React.ComponentProps<typeof Slider>) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between">
+        <Label className="text-xs">{label}</Label>
+        <span className="text-xs tabular-nums text-muted-foreground">{display}</span>
+      </div>
+      <Slider {...sliderProps} />
+    </div>
+  )
 }
 
 export function PuzzleGenerator() {
-  const [widthMm, setWidthMm] = useState(300)
-  const [heightMm, setHeightMm] = useState(200)
-  const [cols, setCols] = useState(6)
-  const [rows, setRows] = useState(4)
-  const [seed, setSeed] = useState(1234)
+  const [widthStr, setWidthStr] = useState("300")
+  const [heightStr, setHeightStr] = useState("200")
+  const [colsStr, setColsStr] = useState("6")
+  const [rowsStr, setRowsStr] = useState("4")
+  const [seedStr, setSeedStr] = useState("1234")
+  const [strokeWidthStr, setStrokeWidthStr] = useState("0.3")
   const [tabSize, setTabSize] = useState(0.28)
   const [jitter, setJitter] = useState(0.6)
   const [strokeColor, setStrokeColor] = useState(STROKE_PRESETS[0].value)
-  const [strokeWidthMm, setStrokeWidthMm] = useState(0.3)
+  const [photo, setPhoto] = useState<string | null>(null)
+  const [photoAspect, setPhotoAspect] = useState<number | null>(null)
+  const [aspectMode, setAspectMode] = useState<"photo" | "free">("free")
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"))
+  const photoInputRef = useRef<HTMLInputElement>(null)
+
+  const widthMm = parseClamped(widthStr, 10, 5000, 300)
+  const lockToPhoto = aspectMode === "photo" && photoAspect !== null
+  // Com a proporção travada na foto, a altura é derivada da largura (só afeta preview/medidas).
+  const heightMm = lockToPhoto
+    ? Math.round((widthMm / photoAspect) * 10) / 10
+    : parseClamped(heightStr, 10, 5000, 200)
+  const cols = Math.round(parseClamped(colsStr, 2, 200, 6))
+  const rows = Math.round(parseClamped(rowsStr, 2, 200, 4))
+  const seed = Math.round(parseClamped(seedStr, 0, 999_999_999, 0))
+  const strokeWidthMm = parseClamped(strokeWidthStr, 0.05, 5, 0.3)
 
   const puzzle = useMemo(
     () =>
@@ -68,8 +116,38 @@ export function PuzzleGenerator() {
   const pieceH = heightMm / rows
   const tooSmall = pieceW < MIN_SAFE_PIECE_MM || pieceH < MIN_SAFE_PIECE_MM
 
+  function toggleTheme() {
+    const isDark = document.documentElement.classList.toggle("dark")
+    localStorage.setItem("theme", isDark ? "dark" : "light")
+    setDark(isDark)
+  }
+
   function randomizeSeed() {
-    setSeed(Math.floor(Math.random() * 1_000_000))
+    setSeedStr(String(Math.floor(Math.random() * 1_000_000)))
+  }
+
+  function onPhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = reader.result as string
+      const img = new Image()
+      img.onload = () => {
+        setPhotoAspect(img.naturalWidth / img.naturalHeight)
+        setAspectMode("photo")
+      }
+      img.src = url
+      setPhoto(url)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ""
+  }
+
+  function removePhoto() {
+    setPhoto(null)
+    setPhotoAspect(null)
+    setAspectMode("free")
   }
 
   function downloadSvg() {
@@ -85,199 +163,272 @@ export function PuzzleGenerator() {
   }
 
   return (
-    <div className="grid w-full max-w-6xl gap-6 p-4 md:p-8 lg:grid-cols-[380px_1fr]">
-      <Card className="h-fit gap-5">
-        <CardHeader>
-          <CardTitle>Configurações</CardTitle>
-          <CardDescription>
-            Padrão de corte em SVG, em escala real (mm), pronto para a máquina a laser.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3">
-            <SectionTitle>Chapa</SectionTitle>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Largura (mm)" htmlFor="width">
-                <Input
-                  id="width"
-                  type="number"
-                  min={10}
-                  value={widthMm}
-                  onChange={(e) => setWidthMm(Number(e.target.value) || 0)}
-                />
-              </Field>
-              <Field label="Altura (mm)" htmlFor="height">
-                <Input
-                  id="height"
-                  type="number"
-                  min={10}
-                  value={heightMm}
-                  onChange={(e) => setHeightMm(Number(e.target.value) || 0)}
-                />
-              </Field>
-            </div>
+    <div className="flex min-h-svh flex-col lg:h-svh lg:flex-row lg:overflow-hidden">
+      <aside className="flex w-full flex-col gap-3 border-b bg-background p-4 lg:h-svh lg:w-[320px] lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-b-0">
+        <div className="flex items-center gap-2">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
+            <Puzzle className="size-3.5" />
           </div>
-
-          <Separator />
-
-          <div className="flex flex-col gap-3">
-            <SectionTitle>Peças</SectionTitle>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Colunas" htmlFor="cols">
-                <Input
-                  id="cols"
-                  type="number"
-                  min={2}
-                  value={cols}
-                  onChange={(e) => setCols(Math.max(2, Number(e.target.value) || 2))}
-                />
-              </Field>
-              <Field label="Linhas" htmlFor="rows">
-                <Input
-                  id="rows"
-                  type="number"
-                  min={2}
-                  value={rows}
-                  onChange={(e) => setRows(Math.max(2, Number(e.target.value) || 2))}
-                />
-              </Field>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {pieceCount} peças · {pieceW.toFixed(1)} × {pieceH.toFixed(1)} mm cada
-            </p>
-            {tooSmall && (
-              <p className="flex items-start gap-1.5 text-sm text-amber-600 dark:text-amber-500">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                Peças menores que {MIN_SAFE_PIECE_MM}mm podem ficar frágeis ou perder detalhe no
-                corte a laser. Reduza colunas/linhas ou aumente a chapa.
-              </p>
-            )}
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-col gap-4">
-            <SectionTitle>Formato do encaixe</SectionTitle>
-            <div className="flex flex-col gap-2">
-              <Label>Tamanho da orelha ({Math.round(tabSize * 100)}%)</Label>
-              <Slider
-                value={[tabSize]}
-                min={0.15}
-                max={0.4}
-                step={0.01}
-                onValueChange={(v) => setTabSize(Array.isArray(v) ? v[0] : v)}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>Aleatoriedade ({Math.round(jitter * 100)}%)</Label>
-              <Slider
-                value={[jitter]}
-                min={0}
-                max={1}
-                step={0.01}
-                onValueChange={(v) => setJitter(Array.isArray(v) ? v[0] : v)}
-              />
-            </div>
-            <Field label="Seed" htmlFor="seed">
-              <div className="flex gap-2">
-                <Input
-                  id="seed"
-                  type="number"
-                  value={seed}
-                  onChange={(e) => setSeed(Number(e.target.value) || 0)}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={randomizeSeed}
-                  title="Sortear novo padrão"
-                >
-                  <Dices />
-                </Button>
-              </div>
-            </Field>
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-col gap-3">
-            <SectionTitle>Traçado (visual)</SectionTitle>
-            <div className="flex items-center gap-2">
-              {STROKE_PRESETS.map((preset) => (
-                <button
-                  key={preset.value}
-                  type="button"
-                  title={preset.label}
-                  onClick={() => setStrokeColor(preset.value)}
-                  className={cn(
-                    "size-7 rounded-full border-2 transition-transform hover:scale-110",
-                    strokeColor === preset.value ? "border-foreground" : "border-transparent",
-                  )}
-                  style={{ backgroundColor: preset.value }}
-                />
-              ))}
-              <input
-                type="color"
-                value={strokeColor}
-                onChange={(e) => setStrokeColor(e.target.value)}
-                className="size-7 cursor-pointer rounded-full border border-border bg-transparent p-0"
-                title="Cor personalizada"
-              />
-              <div className="ml-auto flex items-center gap-2">
-                <Label htmlFor="stroke-width" className="text-muted-foreground text-xs">
-                  Espessura
-                </Label>
-                <Input
-                  id="stroke-width"
-                  type="number"
-                  step={0.1}
-                  min={0.1}
-                  value={strokeWidthMm}
-                  onChange={(e) => setStrokeWidthMm(Number(e.target.value) || 0.1)}
-                  className="w-16"
-                />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              A cor/espessura é só para visualização — a máquina a laser trata qualquer traçado
-              vetorial fechado como linha de corte.
-            </p>
-          </div>
-
-          <Button onClick={downloadSvg} className="mt-1" size="lg">
-            <Download />
-            Baixar SVG
+          <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">
+            Gerador de Quebra-Cabeça
+          </h1>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            onClick={toggleTheme}
+            title={dark ? "Tema claro" : "Tema escuro"}
+          >
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card className="h-fit gap-0 overflow-hidden py-0">
-        <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Ruler className="size-4 text-muted-foreground" />
-            {widthMm} × {heightMm} mm
+        <Separator />
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Largura (mm)" htmlFor="width">
+            <Input
+              id="width"
+              inputMode="decimal"
+              value={widthStr}
+              onChange={(e) => setWidthStr(e.target.value)}
+              onBlur={() => setWidthStr(String(widthMm))}
+            />
+          </Field>
+          <Field label="Altura (mm)" htmlFor="height">
+            <Input
+              id="height"
+              inputMode="decimal"
+              value={lockToPhoto ? String(heightMm) : heightStr}
+              disabled={lockToPhoto}
+              title={lockToPhoto ? "Altura calculada pela proporção da foto" : undefined}
+              onChange={(e) => setHeightStr(e.target.value)}
+              onBlur={() => setHeightStr(String(heightMm))}
+            />
+          </Field>
+          <Field label="Colunas" htmlFor="cols">
+            <Input
+              id="cols"
+              inputMode="numeric"
+              value={colsStr}
+              onChange={(e) => setColsStr(e.target.value)}
+              onBlur={() => setColsStr(String(cols))}
+            />
+          </Field>
+          <Field label="Linhas" htmlFor="rows">
+            <Input
+              id="rows"
+              inputMode="numeric"
+              value={rowsStr}
+              onChange={(e) => setRowsStr(e.target.value)}
+              onBlur={() => setRowsStr(String(rows))}
+            />
+          </Field>
+        </div>
+
+        {tooSmall ? (
+          <p
+            className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400"
+            title={`Peças menores que ${MIN_SAFE_PIECE_MM}mm ficam frágeis no corte a laser. Reduza colunas/linhas ou aumente a chapa.`}
+          >
+            <AlertTriangle className="size-3.5 shrink-0" />
+            {pieceCount} peças de {pieceW.toFixed(1)} × {pieceH.toFixed(1)} mm — frágeis demais
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {pieceCount} peças de {pieceW.toFixed(1)} × {pieceH.toFixed(1)} mm
+          </p>
+        )}
+
+        <Separator />
+
+        <div className="grid grid-cols-2 gap-3">
+          <SliderField
+            label="Orelha"
+            display={`${Math.round(tabSize * 100)}%`}
+            value={[tabSize]}
+            min={0.15}
+            max={0.4}
+            step={0.01}
+            onValueChange={(v) => setTabSize(Array.isArray(v) ? v[0] : v)}
+          />
+          <SliderField
+            label="Aleatoriedade"
+            display={`${Math.round(jitter * 100)}%`}
+            value={[jitter]}
+            min={0}
+            max={1}
+            step={0.01}
+            onValueChange={(v) => setJitter(Array.isArray(v) ? v[0] : v)}
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Label htmlFor="seed" className="text-xs">
+            Seed
+          </Label>
+          <Input
+            id="seed"
+            inputMode="numeric"
+            className="flex-1"
+            value={seedStr}
+            onChange={(e) => setSeedStr(e.target.value)}
+            onBlur={() => setSeedStr(String(seed))}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={randomizeSeed}
+            title="Sortear novo padrão"
+          >
+            <Dices />
+          </Button>
+        </div>
+
+        <Separator />
+
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onPhotoSelected}
+        />
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => photoInputRef.current?.click()}
+            title="A foto aparece sob as linhas no preview, só no seu navegador — não vai no SVG de corte nem para a internet."
+          >
+            <ImagePlus />
+            {photo ? "Trocar foto" : "Foto de referência"}
+          </Button>
+          {photo && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={removePhoto}
+              title="Remover foto"
+            >
+              <X />
+            </Button>
+          )}
+        </div>
+        {photo && (
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+            {(
+              [
+                { mode: "photo", label: "Proporção da foto" },
+                { mode: "free", label: "Livre" },
+              ] as const
+            ).map(({ mode, label }) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAspectMode(mode)}
+                className={cn(
+                  "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                  aspectMode === mode
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Scissors className="size-4" />
-            {pieceCount} peças
+        )}
+
+        <Separator />
+
+        <div
+          className="flex items-center gap-2"
+          title="Cor e espessura são só do preview — o laser corta qualquer traçado vetorial."
+        >
+          {STROKE_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              title={preset.label}
+              onClick={() => setStrokeColor(preset.value)}
+              className={cn(
+                "size-6 rounded-full border-2 ring-1 ring-border transition-transform hover:scale-110",
+                strokeColor === preset.value ? "border-primary" : "border-transparent",
+              )}
+              style={{ backgroundColor: preset.value }}
+            />
+          ))}
+          <input
+            type="color"
+            value={strokeColor}
+            onChange={(e) => setStrokeColor(e.target.value)}
+            className="size-6 cursor-pointer rounded-full border border-border bg-transparent p-0"
+            title="Cor personalizada"
+          />
+          <div className="ml-auto flex items-center gap-1.5">
+            <Label htmlFor="stroke-width" className="text-xs text-muted-foreground">
+              mm
+            </Label>
+            <Input
+              id="stroke-width"
+              inputMode="decimal"
+              value={strokeWidthStr}
+              onChange={(e) => setStrokeWidthStr(e.target.value)}
+              onBlur={() => setStrokeWidthStr(String(strokeWidthMm))}
+              className="w-14"
+            />
           </div>
         </div>
+
+        <Button onClick={downloadSvg} className="mt-auto w-full">
+          <Download />
+          Baixar SVG
+        </Button>
+      </aside>
+
+      <main
+        className="flex min-h-[60svh] flex-1 flex-col items-center justify-center gap-3 p-4 md:p-8"
+        style={{
+          backgroundImage:
+            "linear-gradient(45deg, var(--color-muted) 25%, transparent 25%), linear-gradient(-45deg, var(--color-muted) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--color-muted) 75%), linear-gradient(-45deg, transparent 75%, var(--color-muted) 75%)",
+          backgroundSize: "16px 16px",
+          backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-xs font-medium backdrop-blur">
+            <Ruler className="size-3.5 text-muted-foreground" />
+            {widthMm} × {heightMm} mm
+          </span>
+          <span className="flex items-center gap-1.5 rounded-full border bg-background/80 px-3 py-1 text-xs font-medium backdrop-blur">
+            <Scissors className="size-3.5 text-muted-foreground" />
+            {pieceCount} peças
+          </span>
+        </div>
         <div
-          className="flex items-center justify-center p-6 md:p-10"
+          className="relative overflow-hidden bg-white shadow-xl ring-1 ring-black/5"
           style={{
-            backgroundImage:
-              "linear-gradient(45deg, var(--color-muted) 25%, transparent 25%), linear-gradient(-45deg, var(--color-muted) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--color-muted) 75%), linear-gradient(-45deg, transparent 75%, var(--color-muted) 75%)",
-            backgroundSize: "16px 16px",
-            backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+            width: `min(100%, calc(75svh * ${(widthMm / heightMm).toFixed(4)}))`,
           }}
         >
+          {photo && (
+            <img
+              src={photo}
+              alt="Imagem de referência do quebra-cabeça"
+              className="absolute inset-0 size-full object-cover"
+            />
+          )}
           <div
-            className="w-full max-w-full bg-white shadow-lg [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
+            className="relative [&_svg]:block [&_svg]:h-auto [&_svg]:w-full"
             dangerouslySetInnerHTML={{ __html: puzzle.svg }}
           />
         </div>
-      </Card>
+      </main>
     </div>
   )
 }
