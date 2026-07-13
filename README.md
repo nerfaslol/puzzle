@@ -1,32 +1,29 @@
-# React + TypeScript + Vite
+# 🧩 Gerador de Quebra-Cabeça para Corte a Laser
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Gera padrões de corte de quebra-cabeça (jigsaw) em **SVG com escala real (mm)**, prontos para
+máquinas de corte a laser (LightBurn, Inkscape, etc.).
 
-Currently, two official plugins are available:
+**➜ Usar online: https://nerfaslol.github.io/puzzle/**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Recursos
 
-## React Compiler
+- Dimensões da chapa em milímetros — o SVG abre em escala física correta no software de corte
+- Grade de peças configurável (colunas × linhas), com aviso quando as peças ficam frágeis demais
+- Encaixes clássicos (bulbo + pescoço) com tamanho e aleatoriedade ajustáveis
+- Seed determinística — a mesma seed sempre reproduz o mesmo padrão
+- Foto de referência sob as linhas no preview (fica só no navegador) e trava de proporção
+- Tema claro/escuro
+- SVG otimizado para laser: um único `<path>`, linhas contínuas, **zero segmentos duplicados**,
+  traço fino de 0,1 mm no arquivo baixado
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Desenvolvimento
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # servidor de desenvolvimento
+npm run build    # type-check + build de produção
+npm run lint     # oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Stack: Vite + React + TypeScript + Tailwind CSS v4 + shadcn/ui.
+Deploy automático no GitHub Pages a cada push na `main`.

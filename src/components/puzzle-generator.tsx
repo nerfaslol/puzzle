@@ -74,7 +74,7 @@ export function PuzzleGenerator() {
   const [colsStr, setColsStr] = useState("6")
   const [rowsStr, setRowsStr] = useState("4")
   const [seedStr, setSeedStr] = useState("1234")
-  const [strokeWidthStr, setStrokeWidthStr] = useState("0.3")
+  const [strokeWidthStr, setStrokeWidthStr] = useState("1")
   const [tabSize, setTabSize] = useState(0.28)
   const [jitter, setJitter] = useState(0.6)
   const [strokeColor, setStrokeColor] = useState(STROKE_PRESETS[0].value)
@@ -87,8 +87,9 @@ export function PuzzleGenerator() {
   const widthMm = parseClamped(widthStr, 10, 5000, 300)
   const lockToPhoto = aspectMode === "photo" && photoAspect !== null
   // Com a proporção travada na foto, a altura é derivada da largura (só afeta preview/medidas).
+  // Clamp também aqui: uma foto panorâmica extrema poderia derivar altura fora dos limites.
   const heightMm = lockToPhoto
-    ? Math.round((widthMm / photoAspect) * 10) / 10
+    ? Math.min(5000, Math.max(10, Math.round((widthMm / photoAspect) * 10) / 10))
     : parseClamped(heightStr, 10, 5000, 200)
   const cols = Math.round(parseClamped(colsStr, 2, 200, 6))
   const rows = Math.round(parseClamped(rowsStr, 2, 200, 4))
@@ -258,12 +259,14 @@ export function PuzzleGenerator() {
         <Separator />
 
         <div className="grid grid-cols-2 gap-3">
+          {/* Máximo 0.35: com 0.4 + aleatoriedade alta, orelhas de linhas vizinhas viradas uma
+              para a outra podiam se tocar (profundidade + jitter somando ~1 célula). */}
           <SliderField
             label="Orelha"
             display={`${Math.round(tabSize * 100)}%`}
             value={[tabSize]}
             min={0.15}
-            max={0.4}
+            max={0.35}
             step={0.01}
             onValueChange={(v) => setTabSize(Array.isArray(v) ? v[0] : v)}
           />
