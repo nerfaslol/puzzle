@@ -129,23 +129,38 @@ export function generatePuzzle(opts: PuzzleOptions): GeneratedPuzzle {
   const t = tabSize / 3
   const j = jitter * 0.1
 
-  const paths: string[] = []
+  const lines: { id: string; d: string }[] = []
 
   // Linhas horizontais internas (uma por divisão de linhas), cada uma um path contínuo.
+  // A ordem de consumo do rng (horizontais e depois verticais) é o que fixa o padrão da seed.
   for (let r = 1; r < rows; r++) {
-    paths.push(generateLine(cols, cellW, cellH, r * cellH, true, rng, t, j))
+    lines.push({
+      id: `corte-h-${r}`,
+      d: generateLine(cols, cellW, cellH, r * cellH, true, rng, t, j).trim(),
+    })
   }
 
   // Linhas verticais internas (uma por divisão de colunas).
   for (let c = 1; c < cols; c++) {
-    paths.push(generateLine(rows, cellH, cellW, c * cellW, false, rng, t, j))
+    lines.push({
+      id: `corte-v-${c}`,
+      d: generateLine(rows, cellH, cellW, c * cellW, false, rng, t, j).trim(),
+    })
   }
 
-  const border = `M 0,0 L ${widthMm},0 L ${widthMm},${heightMm} L 0,${heightMm} Z`
-  const d = [border, ...paths].join(" ")
+  const style = `fill="none" stroke="${strokeColor}" stroke-width="${strokeWidthMm}" stroke-linejoin="round" vector-effect="non-scaling-stroke"`
+
+  // Um elemento por linha de corte, na raiz e sem <g>: o arquivo abre já desagrupado no
+  // Affinity/Inkscape (cada linha vira um objeto próprio, nomeado pelo id). Continua valendo a
+  // regra do domínio — cada aresta interna existe uma única vez, então o laser nunca passa duas
+  // vezes no mesmo lugar.
+  const elements = [
+    `<rect id="borda" x="0" y="0" width="${widthMm}" height="${heightMm}" ${style} />`,
+    ...lines.map((line) => `<path id="${line.id}" d="${line.d}" ${style} />`),
+  ]
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${widthMm} ${heightMm}">
-  <path d="${d}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidthMm}" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+${elements.map((el) => `  ${el}`).join("\n")}
 </svg>`
 
   return { svg, widthMm, heightMm }
