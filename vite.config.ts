@@ -5,8 +5,8 @@ import { defineConfig } from "vite"
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Nome do repositório no GitHub — necessário para o site funcionar em nerfaslol.github.io/puzzle/
-  base: "/puzzle/",
+  // GitHub Pages publica em /puzzle/; na Cloudflare Pages o site fica na raiz do domínio.
+  base: process.env.VITE_BASE ?? "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

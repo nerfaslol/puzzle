@@ -27,6 +27,8 @@ jobs:
       # transitivas de outra plataforma (bug npm/cli#4828), o que quebra o npm ci no Linux.
       - run: npm install --no-audit --no-fund
       - run: npm run build
+        env:
+          VITE_BASE: /puzzle/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
